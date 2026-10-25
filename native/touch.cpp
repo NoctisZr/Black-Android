@@ -608,13 +608,32 @@ constexpr Layout kFourFinger = {{
     {0.655f, 0.38f, 0.045f},
     {0.13f, 0.72f, 0.12f},
 }};
+// like a PlayStation pad on a touch screen: the left stick low on the left, the shoulders at the top corners (L2 grenade,
+// L1 crouch, R2 fire, R1 aim), a dpad's four slots on the left (firing mode, health pack, weapon, and the scope's zoom),
+// and the face diamond on the right: triangle suppressor, square use, circle melee, cross reload. The view turns by a
+// swipe on the free middle of the screen, as in the other layouts
+constexpr Layout kPlayStation = {{
+    {0.95f, 0.15f, 0.075f}, {0.059f, 0.40f, 0.065f, true}, {0.95f, 0.34f, 0.06f}, {0.17f, 0.28f, 0.045f},
+    {0.918f, 0.66f, 0.06f}, {0.802f, 0.66f, 0.06f}, {0.05f, 0.15f, 0.075f}, {0.86f, 0.79f, 0.06f},
+    {0.05f, 0.34f, 0.06f}, {0.225f, 0.40f, 0.045f}, {0.17f, 0.52f, 0.045f}, {0.473f, 0.07f, 0.04f},
+    {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
+    {0.036f, 0.08f, 0.045f}, {0.86f, 0.53f, 0.06f},
+    {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
+    {0.581f, 0.07f, 0.04f},
+    {0.92f, 0.78f, 0.07f},
+    {0.115f, 0.40f, 0.045f},
+    {0.12f, 0.72f, 0.12f},
+}};
 struct Preset {
     const char* id;
     const char* label;
     const Layout* places;
 };
 constexpr Preset kPresets[] = {
-    {"default", "DEFAULT", &kTwoFinger}, {"three", "3 FINGER", &kThreeFinger}, {"four", "4 FINGER", &kFourFinger}};
+    {"default", "DEFAULT", &kTwoFinger},
+    {"three", "3 FINGER", &kThreeFinger},
+    {"four", "4 FINGER", &kFourFinger},
+    {"playstation", "PLAYSTATION", &kPlayStation}};
 
 constexpr float kStickZone = 0.42f;    // share of the width from the left a touch takes the stick in
 constexpr float kLookCounts = 1800.0f;  // mouse counts a swipe across the screen's width turns: 90 degrees
@@ -653,9 +672,10 @@ constexpr uint64_t kBackTapMs = 120;
 
 // the buttons' look: drawn as before, or the images of the skin bagasromadon made (issue #14), with the Xbox
 // controller's letters or without
-enum Skin : uint32_t { kClassic, kXbox, kClean, kSkins };
-constexpr const char* kSkinIds[] = {"classic", "xbox", "clean"};
-constexpr const char* kSkinNames[] = {"CLASSIC", "XBOX", "CLEAN"};
+// PlayStation is the clean images with the pad's symbols and shoulder names marked on the controls
+enum Skin : uint32_t { kClassic, kXbox, kClean, kPlayStation, kSkins };
+constexpr const char* kSkinIds[] = {"classic", "xbox", "clean", "playstation"};
+constexpr const char* kSkinNames[] = {"CLASSIC", "XBOX", "CLEAN", "PLAYSTATION"};
 
 // the layout in use, under g_lock
 Layout g_layout = kTwoFinger;
@@ -1405,7 +1425,7 @@ bool Skinned() { return g_skin != kClassic && g_skin_texture; }
 
 // a part of the skin in use, its circle of radius r about c
 void SkinImage(ImDrawList* dl, SkinPart part, ImVec2 c, float r, ImU32 tint) {
-    int i = int(g_skin == kClean ? kSkinParts : 0) + part;
+    int i = int(g_skin == kClean || g_skin == kPlayStation ? kSkinParts : 0) + part;
     float u = float(i % kSkinColumns) * kSkinCellW, v = float(i / kSkinColumns) * kSkinCellH;
     float top = c.y + r - 2 * r * kSkinCellH / kSkinCellW;
     dl->AddImage(g_skin_texture, ImVec2(c.x - r, top), ImVec2(c.x + r, c.y + r), ImVec2(u / g_skin_w, v / g_skin_h),
@@ -1472,6 +1492,34 @@ void DrawEditorBar(ImDrawList* dl, float th) {
                 app::Ui("TAP A CONTROL, THEN HIDE OR SHOW").c_str());
 }
 
+// the PlayStation style's mark on a control, small at its upper right: a face button's symbol, a shoulder button's name
+void DrawPsMark(ImDrawList* dl, std::string_view id, ImVec2 c, float r, float th, int fade) {
+    ImVec2 m(c.x + r * 0.72f, c.y - r * 0.72f);
+    float k = r * 0.26f;
+    int a = 235 * fade / 100;
+    const char* name = id == "fire" ? "R2" : id == "aim" ? "R1" : id == "grenade" ? "L2" : id == "crouch" ? "L1" : nullptr;
+    bool symbol = id == "reload" || id == "melee" || id == "use" || id == "suppressor";
+    if (!name && !symbol) return;
+    dl->AddCircleFilled(m, k * 1.9f, Fade(0, 0, 0, 170 * fade / 100), 24);
+    if (name) {
+        CentredText(dl, m, k * 2.1f, Fade(255, 255, 255, a), name);
+        return;
+    }
+    float t = th * 1.3f;
+    if (id == "reload") {  // cross, blue
+        ImU32 col = Fade(124, 178, 232, a);
+        dl->AddLine(ImVec2(m.x - k, m.y - k), ImVec2(m.x + k, m.y + k), col, t);
+        dl->AddLine(ImVec2(m.x - k, m.y + k), ImVec2(m.x + k, m.y - k), col, t);
+    } else if (id == "melee") {  // circle, red
+        dl->AddCircle(m, k * 1.1f, Fade(255, 102, 102, a), 24, t);
+    } else if (id == "use") {  // square, pink
+        dl->AddRect(ImVec2(m.x - k, m.y - k), ImVec2(m.x + k, m.y + k), Fade(232, 140, 200, a), 0, 0, t);
+    } else {  // triangle, green
+        dl->AddTriangle(ImVec2(m.x, m.y - k * 1.15f), ImVec2(m.x - k * 1.1f, m.y + k * 0.85f),
+                        ImVec2(m.x + k * 1.1f, m.y + k * 0.85f), Fade(110, 215, 170, a), t);
+    }
+}
+
 }  // namespace
 
 void Draw() {
@@ -1509,6 +1557,7 @@ void Draw() {
             DrawIcon({dl, ImVec2(cx, cy), r, on ? Fade(255, 255, 255, 230) : Fade(255, 255, 255, 180 * fade / 100), th},
                      b.icon);
         }
+        if (g_skin == kPlayStation) DrawPsMark(dl, b.id, ImVec2(cx, cy), r, th, fade);
         if (b.press == kGyro) {
             const char* mode = gyro::ModeName();
             float fs = r * 0.55f;
